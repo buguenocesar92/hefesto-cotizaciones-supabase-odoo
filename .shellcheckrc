@@ -1,0 +1,3 @@
+# shellcheck: el filtro de jq se pasa en comillas simples a propósito; las
+# variables que parecen "$s" son argumentos de `jq --arg`, no del shell.
+disable=SC2016

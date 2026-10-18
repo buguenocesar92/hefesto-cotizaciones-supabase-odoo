@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# scripts/coolify-check.sh: verifica que los compose*.yaml de la raíz cumplan
-# el contrato Coolify (puntos 1 y 2: nada que salte a Traefik ni dé poder sobre
-# el host; ningún nombre fijo a nivel raíz ni en redes ni en volúmenes). Para
-# cada compose genera un .env ficticio y renderiza con `docker compose config`,
-# luego enumera las violaciones como "archivo:servicio: motivo" y sale 1.
+# scripts/coolify-check.sh: verifica que el compose del contrato de esta app
+# cumpla el contrato Coolify (puntos 1 y 2: nada que salte a Traefik ni dé poder
+# sobre el host; ningún nombre fijo a nivel raíz ni en redes ni en volúmenes).
+# Genera un .env ficticio y renderiza con `docker compose config`, luego enumera
+# las violaciones como "archivo:servicio: motivo" y sale 1.
 #
-# Origen: plan "B - Hefesto listo para Coolify" (rama coolify). Sin -e: queremos
-# seguir enumerando violaciones incluso cuando el primer check falla.
-set -uo pipefail
+# Origen: plan "B - Hefesto listo para Coolify" (rama coolify).
+# shellcheck disable=SC2016
+set -euo pipefail
 
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DOCKER="${DOCKER_BIN:-docker}"   # sobreescribible para tests (stub en PATH)
@@ -18,14 +18,12 @@ SECRETO_DEFECTO="x1234567890abcdef"   # valor ficticio no secreto, contrato dice
 DB_DEFECTO="mvp_prueba"
 SSL_DEFECTO="disable"
 
-# Una sola composición cumple el contrato hoy (compose.yaml + compose.supabase.yaml).
-COMPOSES=()
-while IFS= read -r -d '' f; do
-  COMPOSES+=("$f")
-done < <(find "$RAIZ" -maxdepth 1 -type f -name 'compose*.yaml' -print0 | sort -z)
+# Una sola composición cumple el contrato hoy (compose.supabase.yaml).
+# compose.yaml (SQLite local) está fuera del contrato de Coolify.
+COMPOSES=("$RAIZ/compose.supabase.yaml")
 
-if [[ ${#COMPOSES[@]} -eq 0 ]]; then
-  printf 'error: no se encontraron compose*.yaml en %s\n' "$RAIZ" >&2
+if [[ ! -f "${COMPOSES[0]}" ]]; then
+  printf 'error: no se encontró %s\n' "${COMPOSES[0]}" >&2
   exit 2
 fi
 
@@ -158,13 +156,15 @@ validar_compose() {
       rc=1
     fi
     if "$JQ" -e --arg s "$svc" \
-         '.services[$s].security_opt // [] | index("unconfined") != null' \
+         '.services[$s].security_opt // [] | any(.[]; test("unconfined"))' \
          "$R" >/dev/null 2>&1; then
       printf '%s motivo=security_opt incluye "unconfined"\n' "$base"
       rc=1
     fi
 
     # Bind mounts: docker.sock prohibido; binds fuera del repo prohibidos.
+    # docker compose convierte rutas relativas en absolutas, así que comparamos
+    # contra la raíz del repo (previa o con separador), no contra /*.
     while IFS= read -r source; do
       [[ -z "$source" ]] && continue
       if [[ "$source" == *"docker.sock"* ]]; then
@@ -172,12 +172,10 @@ validar_compose() {
         rc=1
         continue
       fi
-      case "$source" in
-        /*)
-          printf '%s motivo=bind absoluto fuera del repo: %s\n' "$base" "$source"
-          rc=1 ;;
-        *) ;;
-      esac
+      if [[ "$source" != "$RAIZ" && "$source" != "$RAIZ/"* ]]; then
+        printf '%s motivo=bind fuera del repo: %s\n' "$base" "$source"
+        rc=1
+      fi
     done < <("$JQ" -r --arg s "$svc" \
              '.services[$s].volumes // []
               | .[] | select(.type == "bind") | .source // ""' \
@@ -192,15 +190,6 @@ validar_compose() {
 FALLA=0
 REVISADOS=0
 for compose in "${COMPOSES[@]}"; do
-  # Bootstrap files: la primera línea es "# bootstrap:" y se exceptúan del
-  # contrato (punto 7 del plan), porque son compose de desarrollo local.
-  primera="$(head -n 1 "$compose" 2>/dev/null || true)"
-  case "$primera" in
-    '# bootstrap:'*|'#bootstrap:'*)
-      printf 'saltar %s: bootstrap\n' "${compose#"$RAIZ"/}"
-      continue
-      ;;
-  esac
   REVISADOS=$((REVISADOS + 1))
   if ! validar_compose "$compose"; then
     FALLA=1

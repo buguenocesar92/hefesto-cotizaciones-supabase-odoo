@@ -1,6 +1,3 @@
-# bootstrap: desarrollo local con SQLite (no se publica en Coolify).
-# El script scripts/coolify-check.sh salta los compose marcados con este
-# comentario inicial, según el contrato "compose.bootstrap.yaml".
 services:
   taller:
     build:

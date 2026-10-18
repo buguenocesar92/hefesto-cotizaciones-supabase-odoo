@@ -19,6 +19,6 @@ Una instancia por empresa, con instalación, personalización, carga de catálog
 2. En Coolify crea el recurso a partir de este repositorio, rama `coolify`, build pack Docker Compose.
 3. Selecciona `compose.supabase.yaml` como compose file y asigna el dominio al servicio `taller` (puerto interno 3000). Coolify coloca Traefik delante y resuelve TLS.
 4. Variables de entorno obligatorias (obligatorias marcadas con `?` en el compose): `ADMIN_PASSWORD` (16+ caracteres), `PUBLIC_ORIGIN` (https del dominio de Coolify), `SUPABASE_URL` y `SUPABASE_SECRET_KEY` (clave `sb_secret_…`, nunca `anon/publishable`). Opcionales: `WORKSHOP_ID` (`main` por defecto), `COOKIE_SECURE` (`true` en producción).
-5. Antes del primer deploy y tras cada cambio del compose, ejecuta `bash scripts/coolify-check.sh`. Sale 0 cuando `compose.supabase.yaml` cumple el contrato (sin `ports:` ni capacidades que escapen a Traefik); la versión local con SQLite (`compose.yaml`) queda exceptuada porque está marcada como `# bootstrap:`.
+5. Antes del primer deploy y tras cada cambio del compose, ejecuta `bash scripts/coolify-check.sh`. Sale 0 cuando `compose.supabase.yaml` cumple el contrato (sin `ports:` ni capacidades que escapen a Traefik); `compose.yaml` (SQLite local) no se usa en Coolify y no se revisa.
 
 No migres `supabase db push` contra la base compartida: la versión de migración `202610130001` coincide con la de otros productos Hefesto. Aplica el SQL a mano desde SQL Editor.
